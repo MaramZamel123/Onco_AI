@@ -4,25 +4,25 @@ from PIL import Image
 from doctor_component import render_doctor
 import models as M
 import os
-import streamlit as st
-import gdown
+import urllib.request
+import gdown  # <--- 1. Add import here
 
 @st.cache_resource
 def download_rag_data():
-    with st.spinner("Downloading required RAG data files from cloud storage... Please wait."):
-        if not os.path.exists("train.json"):
-            train_url = "https://drive.google.com/uc?id=1P_0eMdFCMUmjMRF6JkOW7YqsdFn8sYXQ"
-            gdown.download(train_url, "train.json", quiet=False)
-            
-        if not os.path.exists("validation.json"):
-            val_url = "https://drive.google.com/uc?id=1FlAnM0lhp4CrdhQioB2RXhus1KRndKp6"
-            gdown.download(val_url, "validation.json", quiet=False)
+    if not os.path.exists("train.json"):
+        # 2. Use the clean Google Drive URL with gdown.download
+        train_url = "https://drive.google.com/uc?id=1P_0eMdFCMUmjMRF6JkOW7YqsdFn8sYXQ"
+        gdown.download(train_url, "train.json", fuzzy=True)
+        
+    if not os.path.exists("validation.json"):
+        val_url = "https://drive.google.com/uc?id=1FlAnM0lhp4CrdhQioB2RXhus1KRndKp6"
+        gdown.download(val_url, "validation.json", fuzzy=True)
 
-# Run the download safely before anything else loads
 download_rag_data()
 
-
+# --- Rest of your app code continues below ---
 st.title("My Medical AI App")
+...
 
 st.set_page_config(page_title="Dr. Nana", page_icon="🩺", layout="wide")
 
