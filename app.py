@@ -5,21 +5,19 @@ from doctor_component import render_doctor
 import models as M
 import os
 import urllib.request
-
+import streamlit as st
 
 
 @st.cache_resource
 def download_rag_data():
-    if not os.path.exists("train.json"):
-        # 2. Converted to direct download link format
-        train_url = "https://drive.google.com/uc?export=download&id=1P_0eMdFCMUmjMRF6JkOW7YqsdFn8sYXQ"
-        urllib.request.urlretrieve(train_url, "train.json")
-        
-    if not os.path.exists("validation.json"):
-    
-        val_url = "https://drive.google.com/uc?export=download&id=1FlAnM0lhp4CrdhQioB2RXhus1KRndKp6"
-        urllib.request.urlretrieve(val_url, "validation.json")
-
+    with st.spinner("Downloading required RAG data files from cloud storage... Please wait."):
+        if not os.path.exists("train.json"):
+            train_url = "https://drive.google.com/uc?export=download&id=1P_0eMdFCMUmjMRF6JkOW7YqsdFn8sYXQ"
+            urllib.request.urlretrieve(train_url, "train.json")
+            
+        if not os.path.exists("validation.json"):
+            val_url = "https://drive.google.com/uc?export=download&id=1FlAnM0lhp4CrdhQioB2RXhus1KRndKp6"
+            urllib.request.urlretrieve(val_url, "validation.json")
 
 download_rag_data()
 
