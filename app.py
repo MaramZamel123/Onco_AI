@@ -13,11 +13,11 @@ def download_rag_data():
     train_path = "train.json"
     val_path = "validation.json"
     
-    # Direct raw URLs based on your uploaded repository
-    train_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/raw/main/train.json"
-    val_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/raw/main/validation.json"
+    # Updated direct resolve URLs pointing to your Hugging Face dataset repository
+    train_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/resolve/main/train.json"
+    val_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/resolve/main/validation.json"
     
-    # Check if train.json exists and is valid; if not, download it
+    # Check if train.json exists and is valid; if not, download it from Hugging Face
     if not os.path.exists(train_path):
         try:
             urllib.request.urlretrieve(train_url, train_path)
@@ -31,7 +31,6 @@ def download_rag_data():
             st.error(f"Failed to download validation.json: {e}")
 
 download_rag_data()
-
 st.set_page_config(page_title="Dr. Nana", page_icon="🩺", layout="wide")
 
 FRIENDLY = {  # original name: (label, help, example value)
