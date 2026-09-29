@@ -5,24 +5,32 @@ from doctor_component import render_doctor
 import models as M
 import os
 import urllib.request
-import gdown  # <--- 1. Add import here
+import json
+
 
 @st.cache_resource
 def download_rag_data():
-    if not os.path.exists("train.json"):
-        # 2. Use the clean Google Drive URL with gdown.download
-        train_url = "https://drive.google.com/uc?id=1P_0eMdFCMUmjMRF6JkOW7YqsdFn8sYXQ"
-        gdown.download(train_url, "train.json", fuzzy=True)
-        
-    if not os.path.exists("validation.json"):
-        val_url = "https://drive.google.com/uc?id=1FlAnM0lhp4CrdhQioB2RXhus1KRndKp6"
-        gdown.download(val_url, "validation.json", fuzzy=True)
+    train_path = "train.json"
+    val_path = "validation.json"
+    
+    # Direct raw URLs based on your uploaded repository
+    train_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/raw/main/train.json"
+    val_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/raw/main/validation.json"
+    
+    # Check if train.json exists and is valid; if not, download it
+    if not os.path.exists(train_path):
+        try:
+            urllib.request.urlretrieve(train_url, train_path)
+        except Exception as e:
+            st.error(f"Failed to download train.json: {e}")
+            
+    if not os.path.exists(val_path):
+        try:
+            urllib.request.urlretrieve(val_url, val_path)
+        except Exception as e:
+            st.error(f"Failed to download validation.json: {e}")
 
 download_rag_data()
-
-# --- Rest of your app code continues below ---
-st.title("My Medical AI App")
-...
 
 st.set_page_config(page_title="Dr. Nana", page_icon="🩺", layout="wide")
 
