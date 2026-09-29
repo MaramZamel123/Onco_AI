@@ -1,37 +1,87 @@
 import re
 import streamlit as st
+st.set_page_config(page_title="Dr. Nana", page_icon="🩺", layout="wide")
 from PIL import Image
 from doctor_component import render_doctor
 import models as M
 import os
-import urllib.request
 import json
-
+import urllib.request
+import streamlit as st
 
 @st.cache_resource
 def download_rag_data():
-    train_path = "train.json"
-    val_path = "validation.json"
-    
-    # Updated direct resolve URLs pointing to your Hugging Face dataset repository
-    train_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/resolve/main/train.json"
-    val_url = "https://huggingface.co/datasets/maramyoussef0/medical-rag-data/resolve/main/validation.json"
-    
-    # Check if train.json exists and is valid; if not, download it from Hugging Face
-    if not os.path.exists(train_path):
-        try:
-            urllib.request.urlretrieve(train_url, train_path)
-        except Exception as e:
-            st.error(f"Failed to download train.json: {e}")
-            
-    if not os.path.exists(val_path):
-        try:
-            urllib.request.urlretrieve(val_url, val_path)
-        except Exception as e:
-            st.error(f"Failed to download validation.json: {e}")
+    files = {
+        "train.json": (
+            "https://huggingface.co/datasets/"
+            "maramyoussef0/medical-rag-data/resolve/main/train.json"
+        ),
+        "validation.json": (
+            "https://huggingface.co/datasets/"
+            "maramyoussef0/medical-rag-data/resolve/main/validation.json"
+        ),
+    }
 
-download_rag_data()
-st.set_page_config(page_title="Dr. Nana", page_icon="🩺", layout="wide")
+    for filename, url in files.items():
+        needs_download = True
+
+        # 1. Check whether the existing file contains valid JSON
+        if os.path.exists(filename):
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    json.load(f)
+                needs_download = False
+                print(f"{filename}: existing JSON is valid")
+            except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+                print(f"{filename}: invalid file; downloading again")
+
+        if not needs_download:
+            continue
+
+        temp_path = filename + ".tmp"
+
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+
+            with urllib.request.urlopen(request, timeout=60) as response:
+                content = response.read()
+
+            if not content.strip():
+                raise ValueError("The downloaded file is empty.")
+
+            # Detect an HTML error page returned instead of JSON
+            if content.lstrip().lower().startswith(
+                (b"<!doctype html", b"<html")
+            ):
+                raise ValueError(
+                    "Hugging Face returned HTML instead of JSON. "
+                    "Check the dataset URL and file access."
+                )
+
+            # Confirm that the complete response is valid JSON
+            json.loads(content.decode("utf-8"))
+
+            # Save only after validation succeeds
+            with open(temp_path, "wb") as f:
+                f.write(content)
+
+            os.replace(temp_path, filename)
+            print(f"{filename}: downloaded and validated successfully")
+
+        except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+            raise RuntimeError(
+                f"Could not download or validate {filename}: {e}"
+            ) from e
+
+
+    return True
+
 
 FRIENDLY = {  # original name: (label, help, example value)
     "texture_mean": ("Average Tissue Texture", "Pixel variation in tissue image", 19.0),
