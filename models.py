@@ -87,13 +87,12 @@ def _init_rag():
         _faiss_index = faiss.IndexFlatL2(embeddings.shape[1])
         _faiss_index.add(embeddings)
 
-        print("Loading Qwen language model...")
-        model_id = "Qwen/Qwen2.5-3B-Instruct"
+        print("Loading Qwen language model locally...")
+        model_id = "Qwen/Qwen2.5-0.5B-Instruct"  # Lightweight version that fits Streamlit Cloud RAM
         _qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
         _qwen_model = AutoModelForCausalLM.from_pretrained(
             model_id,
-              torch_dtype=torch.float16,
-            device_map="auto"
+            device_map="cpu"  
         )
     except Exception as e:
         print(f"RAG initialization warning: {e}")
