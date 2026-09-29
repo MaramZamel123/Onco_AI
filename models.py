@@ -59,11 +59,12 @@ _subset_df = None
 _rerank_model = None
 _qwen_tokenizer = None
 _qwen_model = None
+_init_error = None  # To track exact errors if any occur
 
 def _init_rag():
-    global _embed_model, _faiss_index, _subset_df, _rerank_model, _qwen_tokenizer, _qwen_model
-    if _qwen_model is not None:
-        return  # Already loaded
+    global _embed_model, _faiss_index, _subset_df, _rerank_model, _qwen_tokenizer, _qwen_model, _init_error
+    if _qwen_model is not None or _init_error is not None:
+        return  # Already attempted / loaded
 
     try:
         from sentence_transformers import SentenceTransformer, CrossEncoder
@@ -75,37 +76,41 @@ def _init_rag():
         if 'patient_message' in train_df.columns and 'doctor_response' in train_df.columns:
             train_df['combined_doc'] = "Patient: " + train_df['patient_message'].astype(str) + " \nDoctor Response: " + train_df['doctor_response'].astype(str)
         
-        _subset_df = train_df.head(50000).copy()
+        # REDUCED to 2,000 rows so it fits safely inside Streamlit Cloud's free RAM limit
+        _subset_df = train_df.head(2000).copy()
 
         print("Loading embedding & reranking models for RAG...")
         _embed_model = SentenceTransformer('all-MiniLM-L6-v2')
         _rerank_model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
-        # Build or load FAISS index
+        # Build FAISS index
         documents = _subset_df['combined_doc'].tolist()
-        embeddings = _embed_model.encode(documents, batch_size=64, convert_to_numpy=True)
+        embeddings = _embed_model.encode(documents, batch_size=32, convert_to_numpy=True)
         _faiss_index = faiss.IndexFlatL2(embeddings.shape[1])
         _faiss_index.add(embeddings)
 
         print("Loading Qwen language model locally...")
-        model_id = "Qwen/Qwen2.5-0.5B-Instruct"  # Lightweight version that fits Streamlit Cloud RAM
+        model_id = "Qwen/Qwen2.5-0.5B-Instruct"  
         _qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
         _qwen_model = AutoModelForCausalLM.from_pretrained(
             model_id,
             device_map="cpu"  
         )
     except Exception as e:
-        print(f"RAG initialization warning: {e}")
+        _init_error = str(e)
+        print(f"RAG initialization failed: {_init_error}")
 
 def rag_answer(query: str) -> str:
     _init_rag()
     if _qwen_model is None or _faiss_index is None:
-        return "RAG system is initializing or dependencies are missing. Please consult a physician for medical advice."
+        # This will now show you the EXACT reason it failed instead of a generic message
+        error_details = _init_error if _init_error else "Unknown loading delay"
+        return f"RAG system is initializing or failed to load. Details: {error_details}"
 
     try:
         # Retrieve top pool from FAISS
         query_vector = _embed_model.encode([query], convert_to_numpy=True)
-        _, indices = _faiss_index.search(query_vector, 10)
+        _, indices = _faiss_index.search(query_vector, 5)
         candidate_docs = [_subset_df.iloc[idx]['combined_doc'] for idx in indices[0]]
         
         # Rerank
@@ -115,7 +120,7 @@ def rag_answer(query: str) -> str:
 
         # Build context
         retrieved_context = ""
-        for i, (idx, doc_text, score) in enumerate(ranked_results[:3]):
+        for i, (idx, doc_text, score) in enumerate(ranked_results[:2]):
             retrieved_context += f"--- Reference Case {i+1} ---\n{doc_text}\n\n"
 
         system_prompt = (
@@ -125,11 +130,11 @@ def rag_answer(query: str) -> str:
         )
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
-        messages = [{"role": "system", "content": system_popup if 'system_popup' in locals() else system_prompt}, {"role": "user", "content": user_content}]
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
         text = _qwen_tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         model_inputs = _qwen_tokenizer([text], return_tensors="pt").to(_qwen_model.device)
 
-        generated_ids = _qwen_model.generate(**model_inputs, max_new_tokens=256, temperature=0.3, do_sample=True, top_p=0.9)
+        generated_ids = _qwen_model.generate(**model_inputs, max_new_tokens=150, temperature=0.3, do_sample=True, top_p=0.9)
         generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)]
         
         return _qwen_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
