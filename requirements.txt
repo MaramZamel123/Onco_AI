@@ -11,3 +11,4 @@ faiss-cpu
 transformers
 huggingface-hub
 gdown
+accelerate
