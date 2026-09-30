@@ -49,23 +49,20 @@ def predict_values(model, values: dict):
     mal_prob = proba[mal_idx]
     return {"Benign": float(1 - mal_prob), "Malignant": float(mal_prob)}
 
-# ---------- 3) Healthcare RAG Chatbot (FAISS + Qwen) ----------
+# ---------- 3) Healthcare RAG Chatbot (FAISS + Cloud API) ----------
 _embed_model = None
 _faiss_index = None
 _subset_df = None
-_qwen_tokenizer = None
-_qwen_model = None
 _init_error = None  
 
 def _init_rag():
-    global _embed_model, _faiss_index, _subset_df, _qwen_tokenizer, _qwen_model, _init_error
-    if _qwen_model is not None or _init_error is not None:
+    global _embed_model, _faiss_index, _subset_df, _init_error
+    if _faiss_index is not None or _init_error is not None:
         return  
 
     try:
         from sentence_transformers import SentenceTransformer
         import faiss
-        from transformers import AutoTokenizer, AutoModelForCausalLM
         from huggingface_hub import hf_hub_download
 
         print("Downloading precomputed FAISS index and data from Hugging Face...")
@@ -76,13 +73,8 @@ def _init_rag():
         with open(df_path, "rb") as f:
             _subset_df = pickle.load(f)
 
-        print("Loading embedding model...")
+        print("Loading lightweight embedding model...")
         _embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-
-        print("Loading Qwen language model locally...")
-        model_id = "Qwen/Qwen2.5-0.5B-Instruct"  
-        _qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
-        _qwen_model = AutoModelForCausalLM.from_pretrained(model_id, device_map="cpu")
         
     except Exception as e:
         _init_error = str(e)
@@ -90,11 +82,14 @@ def _init_rag():
 
 def rag_answer(query: str) -> str:
     _init_rag()
-    if _qwen_model is None or _faiss_index is None:
+    if _faiss_index is None:
         error_details = _init_error if _init_error else "Unknown loading delay"
         return f"RAG system is initializing or failed to load. Details: {error_details}"
 
     try:
+        from huggingface_hub import InferenceClient
+
+        # Retrieve context from FAISS instantly
         query_vector = _embed_model.encode([query], convert_to_numpy=True)
         _, indices = _faiss_index.search(query_vector, 3)
         
@@ -110,13 +105,19 @@ def rag_answer(query: str) -> str:
         )
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
-        text = _qwen_tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        model_inputs = _qwen_tokenizer([text], return_tensors="pt").to(_qwen_model.device)
-
-        generated_ids = _qwen_model.generate(**model_inputs, max_new_tokens=100, temperature=0.3, do_sample=True, top_p=0.9)
-        generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)]
+        # Use Hugging Face's free cloud API for lightning-fast GPU text generation
+        client = InferenceClient("Qwen/Qwen2.5-0.5B-Instruct")
         
-        return _qwen_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        response = client.chat_completion(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content}
+            ],
+            max_tokens=150,
+            temperature=0.3
+        )
+        
+        return response.choices[0].message.content
+        
     except Exception as e:
         return f"Error generating response: {str(e)}"
