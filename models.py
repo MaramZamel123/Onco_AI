@@ -113,14 +113,13 @@ def rag_answer(query: str) -> str:
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
         token = _get_token()
-        # Using DeepSeek-R1 or omitting model specification to rely on the serverless router default
-        client = InferenceClient(token=token)
+        # Explicitly pass model to InferenceClient to prevent conversational task errors
+        client = InferenceClient(model="meta-llama/Llama-3.1-8B-Instruct", token=token)
         
         response = None
         for attempt in range(3):
             try:
                 response = client.chat_completion(
-                    model="deepseek-ai/DeepSign/DeepSeek-R1", # fallback or default serverless routed model
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content}
@@ -129,25 +128,12 @@ def rag_answer(query: str) -> str:
                     temperature=0.3
                 )
                 break
-            except Exception as first_err:
-                # If specific model fails, try calling chat_completion with default serverless recommendation
-                try:
-                    response = client.chat_completion(
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_content}
-                        ],
-                        max_tokens=150,
-                        temperature=0.3
-                    )
-                    break
-                except Exception as api_err:
-                    if "503" in str(api_err) or "loading" in str(api_err).lower():
-                        print(f"Model is waking up (cold start), retrying in 5 seconds... (Attempt {attempt+1}/3)")
-                        time.sleep(5)
-                    else:
-                        if attempt == 2:
-                            raise api_err
+            except Exception as api_err:
+                if "503" in str(api_err) or "loading" in str(api_err).lower():
+                    print(f"Model is waking up (cold start), retrying in 5 seconds... (Attempt {attempt+1}/3)")
+                    time.sleep(5)
+                else:
+                    raise api_err
 
         if response is None:
             return "The AI model container is taking too long to wake up from sleep mode. Please try asking your question again in a moment."
