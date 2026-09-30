@@ -8,6 +8,7 @@ from PIL import Image
 import json
 import pandas as pd
 import numpy as np
+import pickle
 
 # ---------- 1) EfficientNet Ultrasound Classifier ----------
 CLASSES = ["benign", "malignant", "normal"]  
@@ -52,10 +53,40 @@ def predict_values(model, values: dict):
 _embed_model = None
 _faiss_index = None
 _subset_df = None
-_rerank_model = None
 _qwen_tokenizer = None
 _qwen_model = None
 _init_error = None  
+
+def _init_rag():
+    global _embed_model, _faiss_index, _subset_df, _qwen_tokenizer, _qwen_model, _init_error
+    if _qwen_model is not None or _init_error is not None:
+        return  
+
+    try:
+        from sentence_transformers import SentenceTransformer
+        import faiss
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from huggingface_hub import hf_hub_download
+
+        print("Downloading precomputed FAISS index and data from Hugging Face...")
+        index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset")
+        df_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="subset_df.pkl", repo_type="dataset")
+
+        _faiss_index = faiss.read_index(index_path)
+        with open(df_path, "rb") as f:
+            _subset_df = pickle.load(f)
+
+        print("Loading embedding model...")
+        _embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+        print("Loading Qwen language model locally...")
+        model_id = "Qwen/Qwen2.5-0.5B-Instruct"  
+        _qwen_tokenizer = AutoTokenizer.from_pretrained(model_id)
+        _qwen_model = AutoModelForCausalLM.from_pretrained(model_id, device_map="cpu")
+        
+    except Exception as e:
+        _init_error = str(e)
+        print(f"RAG initialization failed: {_init_error}")
 
 def rag_answer(query: str) -> str:
     _init_rag()
@@ -64,16 +95,14 @@ def rag_answer(query: str) -> str:
         return f"RAG system is initializing or failed to load. Details: {error_details}"
 
     try:
-        # 1. Retrieve straight from FAISS (Skipping the slow reranker)
         query_vector = _embed_model.encode([query], convert_to_numpy=True)
-        _, indices = _faiss_index.search(query_vector, 3) # Get top 3
+        _, indices = _faiss_index.search(query_vector, 3)
         
         retrieved_context = ""
         for i, idx in enumerate(indices[0]):
             doc_text = _subset_df.iloc[idx]['combined_doc']
             retrieved_context += f"--- Reference Case {i+1} ---\n{doc_text}\n\n"
 
-        # 2. Prompt setup
         system_prompt = (
             "You are an empathetic and knowledgeable medical AI assistant. "
             "Answer the patient's question accurately using ONLY the provided reference cases from medical history below. "
@@ -85,7 +114,6 @@ def rag_answer(query: str) -> str:
         text = _qwen_tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         model_inputs = _qwen_tokenizer([text], return_tensors="pt").to(_qwen_model.device)
 
-        # 3. Faster generation (reduced max tokens to 100 for quicker replies)
         generated_ids = _qwen_model.generate(**model_inputs, max_new_tokens=100, temperature=0.3, do_sample=True, top_p=0.9)
         generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)]
         
