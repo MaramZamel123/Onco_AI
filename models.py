@@ -9,6 +9,11 @@ import json
 import pandas as pd
 import numpy as np
 import pickle
+import streamlit as st
+
+# ---------- Helper to get HF token safely ----------
+def _get_token():
+    return os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN", "")
 
 # ---------- 1) EfficientNet Ultrasound Classifier ----------
 CLASSES = ["benign", "malignant", "normal"]  
@@ -49,7 +54,6 @@ def predict_values(model, values: dict):
     mal_prob = proba[mal_idx]
     return {"Benign": float(1 - mal_prob), "Malignant": float(mal_prob)}
 
-# ---------- 3) Healthcare RAG Chatbot (FAISS + Cloud API) ----------
 # ---------- 3) Healthcare RAG Chatbot (Optimized for Speed) ----------
 _embed_model = None
 _faiss_index = None
@@ -68,7 +72,7 @@ def _init_rag():
         import pickle
 
         print("Checking/Downloading precomputed FAISS index and data from Hugging Face...")
-        token = "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"
+        token = _get_token()
         
         # hf_hub_download automatically uses local caching, making subsequent loads instant
         index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset", token=token)
@@ -110,7 +114,7 @@ def rag_answer(query: str) -> str:
         )
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
-        token = "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"
+        token = _get_token()
         client = InferenceClient("Qwen/Qwen2.5-0.5B-Instruct", token=token)
         
         # 2. Add retry logic to handle HF serverless cold starts gracefully
