@@ -7,8 +7,6 @@ import models as M
 import os
 import json
 import urllib.request
-import streamlit as st
-
 
 FRIENDLY = {  # original name: (label, help, example value)
     "texture_mean": ("Average Tissue Texture", "Pixel variation in tissue image", 19.0),
@@ -26,41 +24,70 @@ FRIENDLY = {  # original name: (label, help, example value)
 @st.cache_resource
 def load_all():
     out = {}
+    # Load ResNet and SVM models
     for k, fn in (("resnet", M.load_resnet), ("values", M.load_values_model)):
-        try: out[k] = fn()
-        except Exception as e: out[k] = None; st.sidebar.warning(f"{k} model not loaded: {e}")
+        try: 
+            out[k] = fn()
+        except Exception as e: 
+            out[k] = None
+            st.sidebar.warning(f"{k} model not loaded: {e}")
+            
+    # Pre-initialize the RAG system on startup so the first question responds instantly
+    try:
+        M._init_rag()
+    except Exception as e:
+        st.sidebar.warning(f"RAG pre-load warning: {e}")
+        
     return out
+
 models = load_all()
 
 ss = st.session_state
 ss.setdefault("msgs", [("assistant", "Hello, I'm Dr. Nana. Ask me a health question, upload an ultrasound image, or enter your lab values.")])
-ss.setdefault("mood", "wave"); ss.setdefault("say", "Hello, I'm Dr. Nana"); ss.setdefault("n", 0)
-ss.setdefault("scan", None); ss.setdefault("last_file", None); ss.setdefault("pred_vals", None)
+ss.setdefault("mood", "wave")
+ss.setdefault("say", "Hello, I'm Dr. Nana")
+ss.setdefault("n", 0)
+ss.setdefault("scan", None)
+ss.setdefault("last_file", None)
+ss.setdefault("pred_vals", None)
 
-def set_mood(m, say): ss.mood, ss.say, ss.n = m, say, ss.n + 1
+def set_mood(m, say): 
+    ss.mood, ss.say, ss.n = m, say, ss.n + 1
 
 def react(probs):
-    label = max(probs, key=probs.get); conf = probs[label] * 100
-    if conf < 60: set_mood("think", "I'm not fully certain. A specialist review is advised."); return
-    if label == "Malignant": set_mood("worry", "This needs a specialist's attention.")
-    elif label == "Normal": set_mood("good", "Good news!")
-    else: set_mood("reassure", "Benign, but let's keep watch.")
+    label = max(probs, key=probs.get)
+    conf = probs[label] * 100
+    if conf < 60: 
+        set_mood("think", "I'm not fully certain. A specialist review is advised.")
+        return
+    if label == "Malignant": 
+        set_mood("worry", "This needs a specialist's attention.")
+    elif label == "Normal": 
+        set_mood("good", "Good news!")
+    else: 
+        set_mood("reassure", "Benign, but let's keep watch.")
 
 def bars(probs):
-    for k, v in probs.items(): st.progress(min(max(v, 0.0), 1.0), text=f"{k}: {v*100:.1f}%")
+    for k, v in probs.items(): 
+        st.progress(min(max(v, 0.0), 1.0), text=f"{k}: {v*100:.1f}%")
 
 # ---- chat input (handled before drawing so the doctor reacts immediately) ----
 prompt = st.chat_input("Ask Dr. Nana a health question…")
 if prompt:
-    ss.msgs.append(("user", prompt)); low = prompt.lower()
-    if re.match(r"(hi|hello|hey|salam)", low): reply, m, say = "Hello! How can I help you today?", "wave", "Hello! Nice to see you."
-    elif "thank" in low: reply, m, say = "You're welcome! Take care of yourself.", "good", "Happy to help!"
+    ss.msgs.append(("user", prompt))
+    low = prompt.lower()
+    if re.match(r"(hi|hello|hey|salam)", low): 
+        reply, m, say = "Hello! How can I help you today?", "wave", "Hello! Nice to see you."
+    elif "thank" in low: 
+        reply, m, say = "You're welcome! Take care of yourself.", "good", "Happy to help!"
     elif re.search(r"scared|afraid|worried|anxious|fear|nervous", low):
         reply, m, say = "It's completely natural to feel that way. I'm here with you, step by step.", "reassure", "I'm here with you."
     else:
-        with st.spinner("Dr. Nana is thinking…"): reply = M.rag_answer(prompt)
+        with st.spinner("Dr. Nana is thinking…"): 
+            reply = M.rag_answer(prompt)
         m, say = "talk", reply[:70] + "…"
-    ss.msgs.append(("assistant", reply)); set_mood(m, say)
+    ss.msgs.append(("assistant", reply))
+    set_mood(m, say)
 
 left, right = st.columns([1, 2.2], gap="large")
 doc_slot = left.empty()
@@ -70,31 +97,43 @@ with right:
     t_chat, t_scan, t_vals = st.tabs(["Chat", "Ultrasound scan", "Lab values"])
 
     with t_chat:
-        for role, txt in ss.msgs: st.chat_message(role).write(txt)
+        for role, txt in ss.msgs: 
+            st.chat_message(role).write(txt)
 
     with t_scan:
         f = st.file_uploader("Upload breast ultrasound image (JPG / PNG, ultrasound only)", type=["jpg", "jpeg", "png"])
-        if f is None: ss.last_file = None
+        if f is None: 
+            ss.last_file = None
         else:
-            img = Image.open(f); st.image(img, width=300)
-            if models["resnet"] is None: st.error("Ultrasound weights not found (weights/efficientnet_ultrasound.pth).")
+            img = Image.open(f)
+            st.image(img, width=300)
+            if models["resnet"] is None: 
+                st.error("Ultrasound weights not found (weights/efficientnet_ultrasound.pth).")
             else:
                 if ss.last_file != (f.name, f.size):
-                    with st.spinner("Analyzing image…"): ss.scan = M.predict_image(models["resnet"], img)
-                    ss.last_file = (f.name, f.size); react(ss.scan)
+                    with st.spinner("Analyzing image…"): 
+                        ss.scan = M.predict_image(models["resnet"], img)
+                    ss.last_file = (f.name, f.size)
+                    react(ss.scan)
                 bars(ss.scan)
 
     with t_vals:
         with st.form("lab_form"):
-            c = st.columns(2); pred_vals = {}
+            c = st.columns(2)
+            pred_vals = {}
             for i, (k, (lab, hlp, ex)) in enumerate(FRIENDLY.items()):
                 pred_vals[k] = c[i % 2].number_input(lab, value=ex, min_value=0.0, format="%.4f", help=hlp)
             go = st.form_submit_button("Analyze values", type="primary")
         if go:
-            if models["values"] is None: st.error("Model not found (weights/values_model.pkl).")
-            else: ss.pred_vals = M.predict_values(models["values"], pred_vals); react(ss.pred_vals)
-        if ss.pred_vals: bars(ss.pred_vals)
+            if models["values"] is None: 
+                st.error("Model not found (weights/values_model.pkl).")
+            else: 
+                ss.pred_vals = M.predict_values(models["values"], pred_vals)
+                react(ss.pred_vals)
+        if ss.pred_vals: 
+            bars(ss.pred_vals)
 
     st.caption("AI-assisted screening support for educational use. Not a medical diagnosis; please consult a qualified physician.")
 
-with doc_slot.container(): render_doctor(ss.mood, ss.say, ss.n)
+with doc_slot.container(): 
+    render_doctor(ss.mood, ss.say, ss.n)
