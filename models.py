@@ -124,7 +124,7 @@ def rag_answer(query: str) -> str:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content}
                     ],
-                    max_tokens=150,
+                    max_tokens=500,
                     temperature=0.3
                 )
                 break
