@@ -50,6 +50,7 @@ def predict_values(model, values: dict):
     return {"Benign": float(1 - mal_prob), "Malignant": float(mal_prob)}
 
 # ---------- 3) Healthcare RAG Chatbot (FAISS + Cloud API) ----------
+# ---------- 3) Healthcare RAG Chatbot (Optimized for Speed) ----------
 _embed_model = None
 _faiss_index = None
 _subset_df = None
@@ -57,17 +58,19 @@ _init_error = None
 
 def _init_rag():
     global _embed_model, _faiss_index, _subset_df, _init_error
-    if _faiss_index is not None or _init_error is not None:
-        return  
+    if _faiss_index is not None:
+        return  # Already loaded and cached in memory!
 
     try:
         from sentence_transformers import SentenceTransformer
         import faiss
         from huggingface_hub import hf_hub_download
+        import pickle
 
-        print("Downloading precomputed FAISS index and data from Hugging Face...")
-        # Make sure to pass your token here if your dataset repository is private!
+        print("Checking/Downloading precomputed FAISS index and data from Hugging Face...")
         token = "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"
+        
+        # hf_hub_download automatically uses local caching, making subsequent loads instant
         index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset", token=token)
         df_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="subset_df.pkl", repo_type="dataset", token=token)
 
@@ -85,13 +88,13 @@ def _init_rag():
 def rag_answer(query: str) -> str:
     _init_rag()
     if _faiss_index is None:
-        error_details = _init_error if _init_error else "Unknown loading delay"
-        return f"RAG system is initializing or failed to load. Details: {error_details}"
+        return f"RAG system failed to load. Details: {_init_error}"
 
     try:
         from huggingface_hub import InferenceClient
+        import time
 
-        # Retrieve context from FAISS instantly
+        # 1. Retrieve context from FAISS instantly (local vector search takes milliseconds)
         query_vector = _embed_model.encode([query], convert_to_numpy=True)
         _, indices = _faiss_index.search(query_vector, 3)
         
@@ -107,18 +110,31 @@ def rag_answer(query: str) -> str:
         )
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
-        # Use your token with the InferenceClient
         token = "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"
         client = InferenceClient("Qwen/Qwen2.5-0.5B-Instruct", token=token)
         
-        response = client.chat_completion(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            max_tokens=150,
-            temperature=0.3
-        )
+        # 2. Add retry logic to handle HF serverless cold starts gracefully
+        response = None
+        for attempt in range(3):
+            try:
+                response = client.chat_completion(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content}
+                    ],
+                    max_tokens=150,
+                    temperature=0.3
+                )
+                break
+            except Exception as api_err:
+                if "503" in str(api_err) or "loading" in str(api_err).lower():
+                    print(f"Model is waking up (cold start), retrying in 5 seconds... (Attempt {attempt+1}/3)")
+                    time.sleep(5)
+                else:
+                    raise api_err
+
+        if response is None:
+            return "The AI model container is taking too long to wake up from sleep mode. Please try asking your question again in a moment."
         
         return response.choices[0].message.content
         
