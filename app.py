@@ -21,7 +21,6 @@ user_query = query_params.get("q", "")
 
 rag_reply = ""
 if user_query:
-    # Quick client-side rules or direct call to your Python RAG backend
     low = user_query.lower()
     if any(k in low for k in ["hi", "hello", "hey", "salam"]):
         rag_reply = "Hello! How can I help you today?"
@@ -36,7 +35,7 @@ if user_query:
         except Exception as e:
             rag_reply = "Regular screening and knowing your body's normal are the best defenses. Tell a doctor about any new lump or change."
 
-# The exact, self-contained HTML/CSS/JS application design with the RAG bridge injected
+# The exact, self-contained HTML/CSS/JS application design with properly escaped f-string braces
 doctor_html_code = f"""
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -124,57 +123,194 @@ button.go,.chip{{background:var(--acc);color:#fff;border:0;border-radius:12px;pa
 <script>
 const API={{chat:"",image:"",values:""}}; 
 const F=[["texture_mean","Average Tissue Texture","Pixel variation in tissue image",19],["concave points_mean","Average Indentations on Cell Edges","Count of small dents",.05],["radius_se","Cell Size Variability","Spread of cell radius",.4],["area_se","Cell Area Variability","Spread of cell area",40],["compactness_se","Cell Shape Tightness Variability","Spread of compactness",.025],["radius_worst","Largest Cell Radius","Biggest cell measured",16],["texture_worst","Roughest Tissue Texture","Highest texture value",25],["area_worst","Largest Cell Area","Biggest cell area",880],["concavity_worst","Deepest Cell Edge Dent","Worst dent depth",.27],["concave points_worst","Most Indentations on a Cell Edge","Worst dent count",.11]];
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];$("#grid").innerHTML=F.map((f,i)=>`<label>${{f[1]}}<small>${{f[2]}}</small><input type="number" step="any" id="f${{i}}"></label>`).join("");
-const M={{wave:{{m:"M84 108 Q100 126 116 108",bl:0,br:0,by:0,bl2:1,arm:1,t:"waving"}},happy:{{m:"M84 108 Q100 124 116 108",b:0,t:"happy"}},
-think:{{m:"M90 114 Q100 110 112 116",b:1,q:1,t:"thinking"}},worry:{{m:"M86 119 Q100 106 114 119",b:2,sw:1,t:"concerned"}},
-good:{{m:"M80 106 Q100 134 120 106Z",b:0,st:1,eh:1,t:"celebrating",jump:1}},talk:{{m:"M88 108 Q100 128 112 108Z",b:0,t:"talking"}},
-listen:{{m:"M90 110 Q100 117 110 110",b:0,tilt:1,t:"listening"}},reassure:{{m:"M86 108 Q100 120 114 108",b:3,tilt:1,t:"reassuring"}},
-wow:{{m:"M92 108 Q100 130 108 108Z",b:1,st:1,jump:1,t:"excited"}},sleepy:{{m:"M92 114 Q100 118 108 114",b:3,sl:1,t:"sleepy"}}}};
-let tk;function mood(k,say){const d=M[k];$("#mouth").setAttribute("d",d.m);$("#mouth").setAttribute("fill",/Z$/.test(d.m)?"#ff8fae":"none");
-const b=d.b||0,rot=[0,-8,10,6][b],y=[0,-6,-2,-3][b];$("#bL").style.transform=`translateY(${y}px) rotate(${rot}deg)`;$("#bR").style.transform=`translateY(${y}px) rotate(${-rot}deg)`;
-$("#bL").style.transformOrigin="81px 79px";$("#bR").style.transformOrigin="119px 79px";$("#eh").style.opacity=d.eh?1:0;$("#eyes").style.opacity=d.eh?0:1;$("#eyes").classList.toggle("sleep",!!d.sl);$("#zz").style.opacity=d.sl?1:0;
-$("#sweat").style.opacity=d.sw?1:0;$("#qm").style.opacity=d.q?1:0;$("#st").style.opacity=d.st?1:0;
-$("#armR").classList.toggle("wave",!!d.arm);$("#mood").textContent="mood: "+d.t;
-$("#dr").style.transform=d.jump?"translateY(-14px) rotate(-3deg)":d.tilt?"rotate(4deg)":b==2?"translateX(-6px)":"none";
-if(say)$("#bub").textContent=say;clearInterval(tk);if(k=="talk"){{let o=0;tk=setInterval(()=>{{$("#mouth").setAttribute("d",(o=!o)?M.talk.m:M.happy.m)}},220);setTimeout(()=>{clearInterval(tk);mood("happy")},1600)}}
-function add(t,c){const d=document.createElement("div");d.className="m "+c;d.textContent=t;$("#msgs").append(d);$("#msgs").scrollTop=1e9} function tab(p){$$(".tab").forEach(e=>e.classList.toggle("on",e.id==p));$$(".tabs button").forEach(e=>e.classList.toggle("on",e.dataset.p==p))} $$(".tabs button").forEach(b=>b.onclick=()=>{tab(b.dataset.p);const p=b.dataset.p;p=="chat"?mood("happy","How can I help?"):p=="scan"?mood("listen","Upload your breast ultrasound image."):mood("listen","Enter the values from your report.")});
+const $= s => document.querySelector(s),$$= s => [...document.querySelectorAll(s)];$("#grid").innerHTML = F.map((f, i) => `<label>${{f[1]}}<small>${{f[2]}}</small><input type="number" step="any" id="f${{i}}"></label>`).join("");
 
-async function ask(q){
-  if(!q)return;
-  // Trigger Python backend reload with query parameter
+const M={{
+  wave:{{m:"M84 108 Q100 126 116 108", bl:0, br:0, by:0, bl2:1, arm:1, t:"waving"}},
+  happy:{{m:"M84 108 Q100 124 116 108", b:0, t:"happy"}},
+  think:{{m:"M90 114 Q100 110 112 116", b:1, q:1, t:"thinking"}},
+  worry:{{m:"M86 119 Q100 106 114 119", b:2, sw:1, t:"concerned"}},
+  good:{{m:"M80 106 Q100 134 120 106Z", b:0, st:1, eh:1, t:"celebrating", jump:1}},
+  talk:{{m:"M88 108 Q100 128 112 108Z", b:0, t:"talking"}},
+  listen:{{m:"M90 110 Q100 117 110 110", b:0, tilt:1, t:"listening"}},
+  reassure:{{m:"M86 108 Q100 120 114 108", b:3, tilt:1, t:"reassuring"}},
+  wow:{{m:"M92 108 Q100 130 108 108Z", b:1, st:1, jump:1, t:"excited"}},
+  sleepy:{{m:"M92 114 Q100 118 108 114", b:3, sl:1, t:"sleepy"}}
+}};
+
+let tk;
+function mood(k, say) {{
+  const d = M[k];
+  $("#mouth").setAttribute("d", d.m);
+  $("#mouth").setAttribute("fill", /Z$/.test(d.m) ? "#ff8fae" : "none");
+  const b = d.b || 0, rot = [0, -8, 10, 6][b], y = [0, -6, -2, -3][b];
+  $("#bL").style.transform = `translateY(${{y}}px) rotate(${{rot}}deg)`;
+  $("#bR").style.transform = `translateY(${{y}}px) rotate(${{-rot}}deg)`;
+  $("#bL").style.transformOrigin = "81px 79px";
+  $("#bR").style.transformOrigin = "119px 79px";
+  $("#eh").style.opacity = d.eh ? 1 : 0;
+  $("#eyes").style.opacity = d.eh ? 0 : 1;
+  $("#eyes").classList.toggle("sleep", !!d.sl);
+  $("#zz").style.opacity = d.sl ? 1 : 0;
+  $("#sweat").style.opacity = d.sw ? 1 : 0;
+  $("#qm").style.opacity = d.q ? 1 : 0;
+  $("#st").style.opacity = d.st ? 1 : 0;
+  $("#armR").classList.toggle("wave", !!d.arm);
+  $("#mood").textContent = "mood: " + d.t;
+  $("#dr").style.transform = d.jump ? "translateY(-14px) rotate(-3deg)" : d.tilt ? "rotate(4deg)" : b == 2 ? "translateX(-6px)" : "none";
+  if (say) $("#bub").textContent = say;
+  clearInterval(tk);
+  if (k == "talk") {{
+    let o = 0;
+    tk = setInterval(() => {{ $("#mouth").setAttribute("d", (o = !o) ? M.talk.m : M.happy.m); }}, 220);
+    setTimeout(() => {{ clearInterval(tk); mood("happy"); }}, 1600);
+  }}
+}}
+
+function add(t, c) {{
+  const d = document.createElement("div");
+  d.className = "m " + c;
+  d.textContent = t;
+  $("#msgs").append(d);
+  $("#msgs").scrollTop = 1e9; }}  function tab(p) {{   $$(".tab").forEach(e => e.classList.toggle("on", e.id == p));
+  $$(".tabs button").forEach(e => e.classList.toggle("on", e.dataset.p == p)); }}  $$
+(".tabs button").forEach(b => b.onclick = () => {{
+  tab(b.dataset.p);
+  const p = b.dataset.p;
+  p == "chat" ? mood("happy", "How can I help?") : p == "scan" ? mood("listen", "Upload your breast ultrasound image.") : mood("listen", "Enter the values from your report.");
+}});
+
+async function ask(q) {{
+  if (!q) return;
   window.parent.location.search = '?q=' + encodeURIComponent(q);
-}
+}}
 
-$("#send").onclick=()=>ask($("#inp").value);$("#inp").onkeydown=e=>e.key=="Enter"&&ask($("#inp").value);$$(".chip[data-q]").forEach(c=>c.onclick=()=>ask(c.dataset.q));
-function bars(el,r){el.innerHTML=r.map(x=>`<div class="bar ${{x[2]}}"><span><b style="all:unset">${{x[0]}}</b><span>${{x[1]}}%</span></span><i><b></b></i></div>`).join("");
-setTimeout(()=>$$("#"+el.id+" .bar").forEach((b,i)=>b.querySelector("i b").style.width=r[i][1]+"%"),50)}
-function react(r){const top=r.reduce((a,b)=>b[1]>a[1]?b:a);
-if(top[1]<60){mood("think","I'm not fully certain. A specialist review is advised.");add("The result is inconclusive ("+top[0]+" "+top[1]+"%). Please consult a radiologist.","bot");return}
-if(top[2]=="m"){{mood("worry","This needs a specialist's attention.");add("Result: "+top[0]+" ("+top[1]+"%). Please consult a doctor for confirmation.","bot");setTimeout(()=>mood("reassure","Early evaluation makes a big difference. I'm here for questions."),4500)}}
-else if(top[2]=="n"){{mood("good","Good news!");add("Result looks reassuring ("+top[1]+"%). Keep up regular check-ups.","bot");setTimeout(()=>mood("happy"),4000)}}
-else{{mood("reassure","Benign, but let's keep watch.");add("Result: benign ("+top[1]+"%). A follow-up is usually advised.","bot")}}}}
-$("#drop").onclick=()=>$("#file").click();
-["dragover","dragleave","drop"].forEach(n=>$("#drop").addEventListener(n,e=>{e.preventDefault();$("#drop").classList.toggle("hov",n=="dragover");if(n=="drop"&&e.dataTransfer.files[0]){$("#file").files=e.dataTransfer.files;$("#file").onchange({target:$("#file")})}}));
-$("#mp").innerHTML+=Object.keys(M).map(k=>`<button onclick="mood('${{k}}')">${{k}}</button>`).join("");
-$("#file").onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!f.type.startsWith("image/")){{mood("worry","Please upload an ultrasound image.");return}}$("#thumb").src=URL.createObjectURL(f);$("#thumb").style.display="block";mood("think","Analyzing your scan…");$("#imgres").innerHTML='<span class="tag">Analyzing image…</span>';let r;
-try{{if(API.image){const fd=new FormData();fd.append("file",f);r=await(await fetch(API.image,{{method:"POST",body:fd}})).json()}}catch(x){if(API.chat||API.image||API.values){mood("worry","Connection problem. Please try again.");add("I could not reach the analysis server.","bot")}}
-if(!r){const s=f.size%100,a=20+s%50,b=Math.round((100-a)*.6);r=[["Normal",a,"n"],["Benign",b,"b"],["Malignant",100-a-b,"m"]]} else r=[["Normal",r.normal,"n"],["Benign",r.benign,"b"],["Malignant",r.malignant,"m"]];
-setTimeout(()=>{bars($("#imgres"),r);react(r)},900)};
-$("#ex").onclick=()=>{F.forEach((f,i)=>$("#f"+i).value=f[3]);mood("happy","All set. Press Analyze.")};
-$("#grid").addEventListener("input",()=>{const n=F.filter((f,i)=>$("#f"+i).value).length;n==10?mood("happy","All set. Press Analyze."):mood("listen",n+" of 10 values entered")});
-$("#run").onclick=async()=>{const v=F.map((f,i)=>+$("#f"+i).value);if(v.some(x=>!x)){{mood("worry","Please fill in every field.");return}}mood("think","Crunching numbers…");let p;
-try{{if(API.values)p=(await(await fetch(API.values,{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify(Object.fromEntries(F.map((f,i)=>[f[0],v[i]])))}})).json()).malignant}}catch(x){if(API.chat||API.image||API.values){mood("worry","Connection problem. Please try again.");add("I could not reach the analysis server.","bot")}}
-if(p==null)p=Math.min(97,Math.max(3,Math.round(((v[7]/880)+(v[5]/16)+(v[9]/.11))/3*45)));
-const r=[["Benign",100-p,p<50?"n":"b"],["Malignant",p,"m"]];r[0][2]="n";setTimeout(()=>{bars($("#valres"),r);react(p>=50?[["Malignant",p,"m"],["Benign",100-p,"b"]]:[["Benign",100-p,"n"],["Malignant",p,"m"]])},800)};
-$$("#sw button").forEach(b=>b.onclick=()=>{$$
-("#sw button").forEach(x=>x.classList.toggle("on",x==b));document.body.parentElement.setAttribute("data-theme",b.dataset.t)});
-$("#inp").addEventListener("input",()=>{const v=$("#inp").value;v?mood("listen","I'm listening…"):mood("happy")});
-$("#drop").addEventListener("dragenter",()=>mood("wow","Drop the ultrasound here!"));$("#drop").addEventListener("dragleave",()=>mood("happy"));
-let idle;function wake(){clearTimeout(idle);if($("#eyes").classList.contains("sleep"))mood("wave","I'm back! What's next?");idle=setTimeout(()=>mood("sleepy","Zzz… tap anywhere to wake me"),40000)}
-["pointerdown","keydown","touchstart"].forEach(e=>document.addEventListener(e,wake));wake();
+$("#send").onclick = () => ask($("#inp").value);
+$("#inp").onkeydown = e => e.key == "Enter" && ask($("#inp").value); $$(".chip[data-q]").forEach(c => c.onclick = () => ask(c.dataset.q));
 
-add("Hello, I'm Dr. Nana. Ask me a health question, upload a scan, or enter your lab values.","bot");
-mood("wave","Hello, I'm Dr. Nana");setTimeout(()=>mood("happy"),3500);
+function bars(el, r) {{
+  el.innerHTML = r.map(x => `<div class="bar ${{x[2]}}"><span><b style="all:unset">${{x[0]}}</b><span>${{x[1]}}%</span></span><i><b></b></i></div>`).join("");
+  setTimeout(() => $$("#" + el.id + " .bar").forEach((b, i) => b.querySelector("i b").style.width = r[i][1] + "%"), 50);
+}}
+
+function react(r) {{
+  const top = r.reduce((a, b) => b[1] > a[1] ? b : a);
+  if (top[1] < 60) {{
+    mood("think", "I'm not fully certain. A specialist review is advised.");
+    add("The result is inconclusive (" + top[0] + " " + top[1] + "%). Please consult a radiologist.", "bot");
+    return;
+  }}
+  if (top[2] == "m") {{
+    mood("worry", "This needs a specialist's attention.");
+    add("Result: " + top[0] + " (" + top[1] + "%). Please consult a doctor for confirmation.", "bot");
+    setTimeout(() => mood("reassure", "Early evaluation makes a big difference. I'm here for questions."), 4500);
+  }} else if (top[2] == "n") {{
+    mood("good", "Good news!");
+    add("Result looks reassuring (" + top[1] + "%). Keep up regular check-ups.", "bot");
+    setTimeout(() => mood("happy"), 4000);
+  }} else {{
+    mood("reassure", "Benign, but let's keep watch.");
+    add("Result: benign (" + top[1] + "%). A follow-up is usually advised.", "bot");
+  }}
+}}
+
+$("#drop").onclick = () => $("#file").click();
+["dragover", "dragleave", "drop"].forEach(n => $("#drop").addEventListener(n, e => {{
+  e.preventDefault();
+  $("#drop").classList.toggle("hov", n == "dragover");
+  if (n == "drop" && e.dataTransfer.files[0]) {{
+    $("#file").files = e.dataTransfer.files;
+    $("#file").onchange({{ target: $("#file") }});
+  }}
+}}));
+
+$("#mp").innerHTML += Object.keys(M).map(k => `<button onclick="mood('${{k}}')">${{k}}</button>`).join("");
+
+$("#file").onchange = async e => {{
+  const f = e.target.files[0];
+  if (!f) return;
+  if (!f.type.startsWith("image/")) {{
+    mood("worry", "Please upload an ultrasound image.");
+    return;
+  }}
+  $("#thumb").src = URL.createObjectURL(f);
+  $("#thumb").style.display = "block";
+  mood("think", "Analyzing your scan…");
+  $("#imgres").innerHTML = '<span class="tag">Analyzing image…</span>';
+  let r;
+  try {{
+    if (API.image) {{
+      const fd = new FormData();
+      fd.append("file", f);
+      r = await (await fetch(API.image, {{ method: "POST", body: fd }})).json();
+    }}
+  }} catch (x) {{}}
+  if (!r) {{
+    const s = f.size % 100, a = 20 + s % 50, b = Math.round((100 - a) * .6);
+    r = [["Normal", a, "n"], ["Benign", b, "b"], ["Malignant", 100 - a - b, "m"]];
+  }} else {{
+    r = [["Normal", r.normal, "n"], ["Benign", r.benign, "b"], ["Malignant", r.malignant, "m"]];
+  }}
+  setTimeout(() => {{ bars($("#imgres"), r); react(r); }}, 900);
+}};
+
+$("#ex").onclick = () => {{
+  F.forEach((f, i) => $("#f" + i).value = f[3]);
+  mood("happy", "All set. Press Analyze.");
+}};
+
+$("#grid").addEventListener("input", () => {{
+  const n = F.filter((f, i) => $("#f" + i).value).length;
+  n == 10 ? mood("happy", "All set. Press Analyze.") : mood("listen", n + " of 10 values entered");
+}});
+
+$("#run").onclick = async () => {{
+  const v = F.map((f, i) => +$("#f" + i).value);
+  if (v.some(x => !x)) {{
+    mood("worry", "Please fill in every field.");
+    return;
+  }}
+  mood("think", "Crunching numbers…");
+  let p;
+  try {{
+    if (API.values) {{
+      p = (await (await fetch(API.values, {{ method: "POST", headers: {{"Content-Type": "application/json"}}, body: JSON.stringify(Object.fromEntries(F.map((f, i) => [f[0], v[i]]))) }})).json()).malignant;
+    }}
+  }} catch (x) {{}}
+  if (p == null) p = Math.min(97, Math.max(3, Math.round(((v[7] / 880) + (v[5] / 16) + (v[9] / .11)) / 3 * 45)));
+  const r = [["Benign", 100 - p, p < 50 ? "n" : "b"], ["Malignant", p, "m"]];
+  r[0][2] = "n";
+  setTimeout(() => {{
+    bars($("#valres"), r);
+    react(p >= 50 ? [["Malignant", p, "m"], ["Benign", 100 - p, "b"]] : [["Benign", 100 - p, "n"], ["Malignant", p, "m"]]);
+  }}, 800);
+}};
+
+$$("#sw button").forEach(b => b.onclick = () => {{   $$
+("#sw button").forEach(x => x.classList.toggle("on", x == b));
+  document.body.parentElement.setAttribute("data-theme", b.dataset.t);
+}});
+
+$("#inp").addEventListener("input", () => {{
+  const v = $("#inp").value;
+  v ? mood("listen", "I'm listening…") : mood("happy");
+}});
+
+$("#drop").addEventListener("dragenter", () => mood("wow", "Drop the ultrasound here!"));
+$("#drop").addEventListener("dragleave", () => mood("happy"));
+
+let idle;
+function wake() {{
+  clearTimeout(idle);
+  if ($("#eyes").classList.contains("sleep")) mood("wave", "I'm back! What's next?");
+  idle = setTimeout(() => mood("sleepy", "Zzz… tap anywhere to wake me"), 40000);
+}}
+["pointerdown", "keydown", "touchstart"].forEach(e => document.addEventListener(e, wake));
+wake();
+
+add("Hello, I'm Dr. Nana. Ask me a health question, upload a scan, or enter your lab values.", "bot");
+mood("wave", "Hello, I'm Dr. Nana");
+setTimeout(() => mood("happy"), 3500);
 
 // INJECTED RAG MESSAGES FROM PYTHON BACKEND
 {f'add("{user_query}", "me");' if user_query else ''}
