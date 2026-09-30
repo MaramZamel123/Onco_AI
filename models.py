@@ -70,9 +70,18 @@ def _init_rag():
         from sentence_transformers import SentenceTransformer, CrossEncoder
         import faiss
         from transformers import AutoTokenizer, AutoModelForCausalLM
+        from huggingface_hub import hf_hub_download
 
-        # Load datasets
-        train_df = pd.DataFrame(json.load(open("train.json", "r", encoding="utf-8")))
+        # Automatically download and cache the actual JSON file (bypassing LFS pointer issues)
+        print("Downloading train.json from Hugging Face...")
+        train_file_path = hf_hub_download(
+            repo_id="maramyoussef0/medical-rag-data",
+            filename="train.json",
+            repo_type="dataset"
+        )
+
+        # Load dataset safely
+        train_df = pd.DataFrame(json.load(open(train_file_path, "r", encoding="utf-8")))
         if 'patient_message' in train_df.columns and 'doctor_response' in train_df.columns:
             train_df['combined_doc'] = "Patient: " + train_df['patient_message'].astype(str) + " \nDoctor Response: " + train_df['doctor_response'].astype(str)
         
@@ -99,44 +108,3 @@ def _init_rag():
     except Exception as e:
         _init_error = str(e)
         print(f"RAG initialization failed: {_init_error}")
-
-def rag_answer(query: str) -> str:
-    _init_rag()
-    if _qwen_model is None or _faiss_index is None:
-        # This will now show you the EXACT reason it failed instead of a generic message
-        error_details = _init_error if _init_error else "Unknown loading delay"
-        return f"RAG system is initializing or failed to load. Details: {error_details}"
-
-    try:
-        # Retrieve top pool from FAISS
-        query_vector = _embed_model.encode([query], convert_to_numpy=True)
-        _, indices = _faiss_index.search(query_vector, 5)
-        candidate_docs = [_subset_df.iloc[idx]['combined_doc'] for idx in indices[0]]
-        
-        # Rerank
-        eval_pairs = [[query, doc] for doc in candidate_docs]
-        rerank_scores = _rerank_model.predict(eval_pairs)
-        ranked_results = sorted(zip(indices[0], candidate_docs, rerank_scores), key=lambda x: x[2], reverse=True)
-
-        # Build context
-        retrieved_context = ""
-        for i, (idx, doc_text, score) in enumerate(ranked_results[:2]):
-            retrieved_context += f"--- Reference Case {i+1} ---\n{doc_text}\n\n"
-
-        system_prompt = (
-            "You are an empathetic and knowledgeable medical AI assistant. "
-            "Answer the patient's question accurately using ONLY the provided reference cases from medical history below. "
-            "If the answer cannot be found in the references, state so cautiously."
-        )
-        user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
-
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
-        text = _qwen_tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        model_inputs = _qwen_tokenizer([text], return_tensors="pt").to(_qwen_model.device)
-
-        generated_ids = _qwen_model.generate(**model_inputs, max_new_tokens=150, temperature=0.3, do_sample=True, top_p=0.9)
-        generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)]
-        
-        return _qwen_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    except Exception as e:
-        return f"Error generating response: {str(e)}"
