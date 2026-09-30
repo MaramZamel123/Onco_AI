@@ -28,8 +28,6 @@ if user_query:
         rag_reply = "You're very welcome! Take care of yourself."
     elif any(k in low for k in ["scared", "afraid", "worried", "anxious"]):
         rag_reply = "It's completely natural to feel that way. I'm here with you, and we can go through this step by step."
-    elif "upload scan" in low:
-        rag_reply = "To upload a scan, click on the 'Scan' tab at the top and select your ultrasound image."
     else:
         try:
             # THIS CALLS YOUR ACTUAL PYTHON RAG MODEL!
@@ -174,8 +172,8 @@ function add(t, c) {{
   d.className = "m " + c;
   d.textContent = t;
   $("#msgs").append(d);
-  $("#msgs").scrollTop = 1e9;  }}  function tab(p) {{    $$(".tab").forEach(e => e.classList.toggle("on", e.id == p));
-  $$(".tabs button").forEach(e => e.classList.toggle("on", e.dataset.p == p));  }}  $$
+  $("#msgs").scrollTop = 1e9; }}  function tab(p) {{   $$(".tab").forEach(e => e.classList.toggle("on", e.id == p));
+  $$(".tabs button").forEach(e => e.classList.toggle("on", e.dataset.p == p)); }}  $$
 (".tabs button").forEach(b => b.onclick = () => {{
   tab(b.dataset.p);
   const p = b.dataset.p;
@@ -184,28 +182,11 @@ function add(t, c) {{
 
 async function ask(q) {{
   if (!q) return;
-  if (q.toLowerCase() === "upload scan") {{
-    tab("scan");
-    mood("listen", "Upload your breast ultrasound image.");
-    return;
-  }}
-  try {{
-    window.parent.location.search = '?q=' + encodeURIComponent(q);
-  }} catch(e) {{
-    window.location.search = '?q=' + encodeURIComponent(q);
-  }}
+  window.parent.location.search = '?q=' + encodeURIComponent(q);
 }}
 
-$("#send").onclick = () => {{
-  const val = $("#inp").value;
-  ask(val);
-}};
-
-$("#inp").onkeydown = e => {{
-  if (e.key == "Enter") {{
-    ask($("#inp").value);   }} }};  $$(".chip[data-q]").forEach(c => {{
-  c.onclick = () => ask(c.dataset.q);
-}});
+$("#send").onclick = () => ask($("#inp").value);
+$("#inp").onkeydown = e => e.key == "Enter" && ask($("#inp").value); $$(".chip[data-q]").forEach(c => c.onclick = () => ask(c.dataset.q));
 
 function bars(el, r) {{
   el.innerHTML = r.map(x => `<div class="bar ${{x[2]}}"><span><b style="all:unset">${{x[0]}}</b><span>${{x[1]}}%</span></span><i><b></b></i></div>`).join("");
@@ -331,7 +312,7 @@ add("Hello, I'm Dr. Nana. Ask me a health question, upload a scan, or enter your
 mood("wave", "Hello, I'm Dr. Nana");
 setTimeout(() => mood("happy"), 3500);
 
-# INJECTED RAG MESSAGES FROM PYTHON BACKEND
+// INJECTED RAG MESSAGES FROM PYTHON BACKEND
 {f'add("{user_query}", "me");' if user_query else ''}
 {f'add("{rag_reply.replace(chr(34), chr(92)+chr(34)).replace(chr(10), " ")}", "bot"); mood("talk", "{rag_reply[:60].replace(chr(34), "")}…");' if rag_reply else ''}
 </script></body></html>
