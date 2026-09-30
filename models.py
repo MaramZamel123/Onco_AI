@@ -11,23 +11,34 @@ import numpy as np
 import pickle
 import streamlit as st
 
+
 # ---------- Helper to get HF token safely ----------
 def _get_token():
-    return os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN", "")
+    token = os.getenv("HF_TOKEN")
+    if token:
+        return token
+    try:
+        return st.secrets.get("HF_TOKEN", "")
+    except Exception:
+        # No secrets.toml present
+        return ""
+
 
 # ---------- 1) EfficientNet Ultrasound Classifier ----------
-CLASSES = ["benign", "malignant", "normal"]  
+CLASSES = ["benign", "malignant", "normal"]
 _tf = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+
 def load_resnet(path="weights/efficientnet_ultrasound.pth"):
     m = tv_models.efficientnet_b0(weights=None)
     m.classifier[1] = nn.Linear(m.classifier[1].in_features, len(CLASSES))
     m.load_state_dict(torch.load(path, map_location="cpu"))
     return m.eval()
+
 
 def predict_image(model, pil_img):
     x = _tf(pil_img.convert("RGB")).unsqueeze(0)
@@ -36,15 +47,18 @@ def predict_image(model, pil_img):
     ui_classes = ["Benign", "Malignant", "Normal"]
     return dict(zip(ui_classes, p))
 
+
 # ---------- 2) Numeric SVM Classifier ----------
 FEATURES = [
-    "texture_mean", "concave points_mean", "radius_se", "area_se", 
-    "compactness_se", "radius_worst", "texture_worst", 
+    "texture_mean", "concave points_mean", "radius_se", "area_se",
+    "compactness_se", "radius_worst", "texture_worst",
     "area_worst", "concavity_worst", "concave points_worst"
 ]
 
+
 def load_values_model(path="weights/values_model.pkl"):
     return joblib.load(path)
+
 
 def predict_values(model, values: dict):
     X = np.array([[values[f] for f in FEATURES]], dtype=float)
@@ -54,26 +68,27 @@ def predict_values(model, values: dict):
     mal_prob = proba[mal_idx]
     return {"Benign": float(1 - mal_prob), "Malignant": float(mal_prob)}
 
+
 # ---------- 3) Healthcare RAG Chatbot (Optimized for Speed) ----------
 _embed_model = None
 _faiss_index = None
 _subset_df = None
-_init_error = None  
+_init_error = None
+
 
 def _init_rag():
     global _embed_model, _faiss_index, _subset_df, _init_error
     if _faiss_index is not None:
-        return  # Already loaded and cached in memory!
+        return  # Already loaded and cached in memory
 
     try:
         from sentence_transformers import SentenceTransformer
         import faiss
         from huggingface_hub import hf_hub_download
-        import pickle
 
         print("Checking/Downloading precomputed FAISS index and data from Hugging Face...")
-        token = _get_token()
-        
+        token = _get_token() or None
+
         index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset", token=token)
         df_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="subset_df.pkl", repo_type="dataset", token=token)
 
@@ -83,27 +98,33 @@ def _init_rag():
 
         print("Loading lightweight embedding model...")
         _embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-        
+        _init_error = None
+
     except Exception as e:
         _init_error = str(e)
         print(f"RAG initialization failed: {_init_error}")
 
+
 def rag_answer(query: str) -> str:
     _init_rag()
-    if _faiss_index is None:
+    if _faiss_index is None or _embed_model is None or _subset_df is None:
         return f"RAG system failed to load. Details: {_init_error}"
 
     try:
         from huggingface_hub import InferenceClient
         import time
 
-        query_vector = _embed_model.encode([query], convert_to_numpy=True)
+        query_vector = _embed_model.encode([query], convert_to_numpy=True).astype("float32")
         _, indices = _faiss_index.search(query_vector, 3)
-        
+
         retrieved_context = ""
-        for i, idx in enumerate(indices[0]):
-            doc_text = _subset_df.iloc[idx]['combined_doc']
-            retrieved_context += f"--- Reference Case {i+1} ---\n{doc_text}\n\n"
+        n = 0
+        for idx in indices[0]:
+            if idx < 0:  # FAISS returns -1 when fewer than k results exist
+                continue
+            n += 1
+            doc_text = _subset_df.iloc[int(idx)]['combined_doc']
+            retrieved_context += f"--- Reference Case {n} ---\n{doc_text}\n\n"
 
         system_prompt = (
             "You are an empathetic and knowledgeable medical AI assistant. "
@@ -112,10 +133,10 @@ def rag_answer(query: str) -> str:
         )
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
-        token = _get_token()
+        token = _get_token() or None
         # Explicitly pass model to InferenceClient to prevent conversational task errors
         client = InferenceClient(model="meta-llama/Llama-3.1-8B-Instruct", token=token)
-        
+
         response = None
         for attempt in range(3):
             try:
@@ -137,8 +158,8 @@ def rag_answer(query: str) -> str:
 
         if response is None:
             return "The AI model container is taking too long to wake up from sleep mode. Please try asking your question again in a moment."
-        
+
         return response.choices[0].message.content
-        
+
     except Exception as e:
         return f"Error generating response: {str(e)}"
