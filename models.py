@@ -1,3 +1,65 @@
+"""Loaders + predict functions adjusted for your notebooks."""
+import os
+import joblib
+import torch
+import torch.nn as nn
+from torchvision import models as tv_models, transforms
+from PIL import Image
+import json
+import pandas as pd
+import numpy as np
+import pickle
+import streamlit as st
+
+# ---------- Helper to get HF token safely ----------
+def _get_token():
+    return os.getenv("HF_TOKEN") or st.secrets.get("HF_TOKEN", "")
+
+# ---------- 1) EfficientNet Ultrasound Classifier ----------
+CLASSES = ["benign", "malignant", "normal"]  
+_tf = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+
+def load_resnet(path="weights/efficientnet_ultrasound.pth"):
+    m = tv_models.efficientnet_b0(weights=None)
+    m.classifier[1] = nn.Linear(m.classifier[1].in_features, len(CLASSES))
+    m.load_state_dict(torch.load(path, map_location="cpu"))
+    return m.eval()
+
+def predict_image(model, pil_img):
+    x = _tf(pil_img.convert("RGB")).unsqueeze(0)
+    with torch.no_grad():
+        p = torch.softmax(model(x), dim=1)[0].tolist()
+    ui_classes = ["Benign", "Malignant", "Normal"]
+    return dict(zip(ui_classes, p))
+
+# ---------- 2) Numeric SVM Classifier ----------
+FEATURES = [
+    "texture_mean", "concave points_mean", "radius_se", "area_se", 
+    "compactness_se", "radius_worst", "texture_worst", 
+    "area_worst", "concavity_worst", "concave points_worst"
+]
+
+def load_values_model(path="weights/values_model.pkl"):
+    return joblib.load(path)
+
+def predict_values(model, values: dict):
+    X = np.array([[values[f] for f in FEATURES]], dtype=float)
+    proba = model.predict_proba(X)[0]
+    classes = list(model.classes_)
+    mal_idx = classes.index(1) if 1 in classes else 1
+    mal_prob = proba[mal_idx]
+    return {"Benign": float(1 - mal_prob), "Malignant": float(mal_prob)}
+
+# ---------- 3) Healthcare RAG Chatbot (Optimized for Speed) ----------
+_embed_model = None
+_faiss_index = None
+_subset_df = None
+_init_error = None  
+
 def rag_answer(query: str) -> str:
     _init_rag()
     if _faiss_index is None:
