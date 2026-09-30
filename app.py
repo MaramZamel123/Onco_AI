@@ -28,6 +28,8 @@ if user_query:
         rag_reply = "You're very welcome! Take care of yourself."
     elif any(k in low for k in ["scared", "afraid", "worried", "anxious"]):
         rag_reply = "It's completely natural to feel that way. I'm here with you, and we can go through this step by step."
+    elif "upload scan" in low:
+        rag_reply = "To upload a scan, click on the 'Scan' tab at the top and select your ultrasound image."
     else:
         try:
             # THIS CALLS YOUR ACTUAL PYTHON RAG MODEL!
@@ -35,7 +37,7 @@ if user_query:
         except Exception as e:
             rag_reply = "Regular screening and knowing your body's normal are the best defenses. Tell a doctor about any new lump or change."
 
-# The exact, self-contained HTML/CSS/JS application design with properly escaped f-string braces
+# The exact, self-contained HTML/CSS/JS application design with fully escaped f-string braces
 doctor_html_code = f"""
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -182,6 +184,11 @@ function add(t, c) {{
 
 async function ask(q) {{
   if (!q) return;
+  if (q.toLowerCase() === "upload scan") {{
+    tab("scan");
+    mood("listen", "Upload your breast ultrasound image.");
+    return;
+  }}
   window.parent.location.search = '?q=' + encodeURIComponent(q);
 }}
 
@@ -262,7 +269,7 @@ $("#ex").onclick = () => {{
 $("#grid").addEventListener("input", () => {{
   const n = F.filter((f, i) => $("#f" + i).value).length;
   n == 10 ? mood("happy", "All set. Press Analyze.") : mood("listen", n + " of 10 values entered");
-}});
+}};
 
 $("#run").onclick = async () => {{
   const v = F.map((f, i) => +$("#f" + i).value);
