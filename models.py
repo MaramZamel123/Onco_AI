@@ -60,6 +60,34 @@ _faiss_index = None
 _subset_df = None
 _init_error = None  
 
+def _init_rag():
+    global _embed_model, _faiss_index, _subset_df, _init_error
+    if _faiss_index is not None:
+        return  # Already loaded and cached in memory!
+
+    try:
+        from sentence_transformers import SentenceTransformer
+        import faiss
+        from huggingface_hub import hf_hub_download
+        import pickle
+
+        print("Checking/Downloading precomputed FAISS index and data from Hugging Face...")
+        token = _get_token()
+        
+        index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset", token=token)
+        df_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="subset_df.pkl", repo_type="dataset", token=token)
+
+        _faiss_index = faiss.read_index(index_path)
+        with open(df_path, "rb") as f:
+            _subset_df = pickle.load(f)
+
+        print("Loading lightweight embedding model...")
+        _embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+        
+    except Exception as e:
+        _init_error = str(e)
+        print(f"RAG initialization failed: {_init_error}")
+
 def rag_answer(query: str) -> str:
     _init_rag()
     if _faiss_index is None:
@@ -69,7 +97,6 @@ def rag_answer(query: str) -> str:
         from huggingface_hub import InferenceClient
         import time
 
-        # 1. Retrieve context from FAISS instantly
         query_vector = _embed_model.encode([query], convert_to_numpy=True)
         _, indices = _faiss_index.search(query_vector, 3)
         
@@ -86,8 +113,6 @@ def rag_answer(query: str) -> str:
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
         token = _get_token()
-        
-        # Using a widely supported router model with the :cheapest tag for serverless access
         client = InferenceClient(token=token)
         
         response = None
