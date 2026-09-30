@@ -7,9 +7,7 @@ import streamlit.components.v1 as components
 
 import models as M
 
-# ---------------------------------------------------------------------------
-# Page setup
-# ---------------------------------------------------------------------------
+
 st.set_page_config(
     page_title="Dr. Nana – Breast Health Assistant",
     page_icon="🩺",
@@ -30,9 +28,6 @@ def _warm_up():
 _warm_up()
 
 
-# ---------------------------------------------------------------------------
-# Chat logic (runs in Python, called from the HTML component)
-# ---------------------------------------------------------------------------
 def get_reply(q: str) -> str:
     low = q.lower()
     words = set(re.findall(r"[a-z']+", low))
@@ -52,10 +47,6 @@ def get_reply(q: str) -> str:
         return ("Regular screening and knowing your body's normal are the best defenses. "
                 "Tell a doctor about any new lump or change.")
 
-
-# ---------------------------------------------------------------------------
-# The HTML / CSS / JS interface (plain string: single braces, no f-string)
-# ---------------------------------------------------------------------------
 DOCTOR_HTML = r"""
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -154,7 +145,7 @@ button.go,.chip{background:var(--acc);color:#fff;border:0;border-radius:12px;pad
 
 <div class="panel"><div class="tabs"><button data-p="chat" class="on">Chat</button><button data-p="scan">Scan</button><button data-p="vals">Values</button></div>
 <div class="tab on" id="chat"><div id="msgs"></div>
-<div class="row"><button class="chip" data-q="What are early signs of breast cancer?">Early signs?</button><button class="chip" data-q="How often should I get screened?">Screening?</button><button class="chip" data-q="Upload scan">Upload scan</button></div>
+<div class="row"><button class="chip" data-q="Upload scan">Upload scan</button></div>
 <div class="row"><input id="inp" placeholder="Ask Dr. Nana a health question…"><button class="go" id="send">Send</button></div></div>
 <div class="tab" id="scan"><div class="drop" id="drop"><b>Upload breast ultrasound image</b><small>Drag &amp; drop or click · JPG / PNG · ultrasound images only</small></div>
 <input type="file" id="file" accept="image/*" hidden><img id="thumb" class="thumb" alt="preview"><div id="imgres" style="margin-top:12px"></div></div>
@@ -167,7 +158,7 @@ const F=[["texture_mean","Average Tissue Texture","Pixel variation in tissue ima
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 $("#grid").innerHTML = F.map((f, i) => `<label>${f[1]}<small>${f[2]}</small><input type="number" step="any" id="f${i}"></label>`).join("");
 
-/* ---------- Streamlit bridge (talks to Python without reloading the page) ---------- */
+
 const ST = {
   send(type, data) {
     window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
@@ -191,7 +182,7 @@ window.addEventListener("message", e => {
 ST.send("streamlit:componentReady", { apiVersion: 1 });
 ST.send("streamlit:setFrameHeight", { height: 850 });
 
-/* ---------- Dr. Nana moods ---------- */
+
 const M={
   wave:{m:"M84 108 Q100 126 116 108", bl:0, br:0, by:0, bl2:1, arm:1, t:"waving"},
   happy:{m:"M84 108 Q100 124 116 108", b:0, t:"happy"},
@@ -234,7 +225,7 @@ function mood(k, say) {
   }
 }
 
-/* ---------- Chat ---------- */
+
 function add(t, c) {
   const d = document.createElement("div");
   d.className = "m " + c;
@@ -258,7 +249,7 @@ $$(".tabs button").forEach(b => b.onclick = () => {
 function ask(q) {
   q = (q || "").trim();
   if (!q) return;
-  if (q === "Upload scan") {              // this chip just opens the Scan tab
+  if (q === "Upload scan") {              
     tab("scan");
     mood("listen", "Upload your breast ultrasound image.");
     return;
@@ -276,7 +267,7 @@ $("#send").onclick = () => ask($("#inp").value);
 $("#inp").onkeydown = e => { if (e.key == "Enter") ask($("#inp").value); };
 $$(".chip[data-q]").forEach(c => c.onclick = () => ask(c.dataset.q));
 
-/* ---------- Scan / values ---------- */
+
 function bars(el, r) {
   el.innerHTML = r.map(x => `<div class="bar ${x[2]}"><span><b style="all:unset">${x[0]}</b><span>${x[1]}%</span></span><i><b></b></i></div>`).join("");
   setTimeout(() => $$("#" + el.id + " .bar").forEach((b, i) => b.querySelector("i b").style.width = r[i][1] + "%"), 50);
@@ -375,7 +366,7 @@ $("#run").onclick = async () => {
   }, 800);
 };
 
-/* ---------- Themes ---------- */
+
 $$("#sw button").forEach(b => b.onclick = () => {
   $$("#sw button").forEach(x => x.classList.toggle("on", x == b));
   document.documentElement.setAttribute("data-theme", b.dataset.t);
@@ -404,9 +395,6 @@ setTimeout(() => mood("happy"), 3500);
 </script></body></html>
 """
 
-# ---------------------------------------------------------------------------
-# Register the HTML as a bidirectional Streamlit component
-# ---------------------------------------------------------------------------
 COMP_DIR = os.path.join(tempfile.gettempdir(), "dr_nana_component")
 os.makedirs(COMP_DIR, exist_ok=True)
 with open(os.path.join(COMP_DIR, "index.html"), "w", encoding="utf-8") as fh:
