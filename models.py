@@ -66,8 +66,10 @@ def _init_rag():
         from huggingface_hub import hf_hub_download
 
         print("Downloading precomputed FAISS index and data from Hugging Face...")
-        index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset")
-        df_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="subset_df.pkl", repo_type="dataset")
+        # Make sure to pass your token here if your dataset repository is private!
+        token = "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"
+        index_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="medical_faiss.index", repo_type="dataset", token=token)
+        df_path = hf_hub_download(repo_id="maramyoussef0/medical-rag-data", filename="subset_df.pkl", repo_type="dataset", token=token)
 
         _faiss_index = faiss.read_index(index_path)
         with open(df_path, "rb") as f:
@@ -105,8 +107,9 @@ def rag_answer(query: str) -> str:
         )
         user_content = f"### Reference Cases:\n{retrieved_context}\n### Patient Query:\n{query}\n### Doctor's Professional Response:"
 
-        # Use Hugging Face's free cloud API for lightning-fast GPU text generation
-        client = InferenceClient("Qwen/Qwen2.5-0.5B-Instruct")
+        # Use your token with the InferenceClient
+        token = "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"
+        client = InferenceClient("Qwen/Qwen2.5-0.5B-Instruct", token=token)
         
         response = client.chat_completion(
             messages=[
