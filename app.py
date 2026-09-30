@@ -37,7 +37,7 @@ if user_query:
         except Exception as e:
             rag_reply = "Regular screening and knowing your body's normal are the best defenses. Tell a doctor about any new lump or change."
 
-# The exact, self-contained HTML/CSS/JS application design with fully escaped f-string braces
+# The exact, self-contained HTML/CSS/JS application design with properly escaped f-string braces
 doctor_html_code = f"""
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -174,8 +174,8 @@ function add(t, c) {{
   d.className = "m " + c;
   d.textContent = t;
   $("#msgs").append(d);
-  $("#msgs").scrollTop = 1e9; }}  function tab(p) {{   $$(".tab").forEach(e => e.classList.toggle("on", e.id == p));
-  $$(".tabs button").forEach(e => e.classList.toggle("on", e.dataset.p == p)); }}  $$
+  $("#msgs").scrollTop = 1e9;  }}  function tab(p) {{    $$(".tab").forEach(e => e.classList.toggle("on", e.id == p));
+  $$(".tabs button").forEach(e => e.classList.toggle("on", e.dataset.p == p));  }}  $$
 (".tabs button").forEach(b => b.onclick = () => {{
   tab(b.dataset.p);
   const p = b.dataset.p;
@@ -189,11 +189,23 @@ async function ask(q) {{
     mood("listen", "Upload your breast ultrasound image.");
     return;
   }}
-  window.parent.location.search = '?q=' + encodeURIComponent(q);
+  try {{
+    window.parent.location.search = '?q=' + encodeURIComponent(q);
+  }} catch(e) {{
+    window.location.search = '?q=' + encodeURIComponent(q);
+  }}
 }}
 
-$("#send").onclick = () => ask($("#inp").value);
-$("#inp").onkeydown = e => e.key == "Enter" && ask($("#inp").value); $$(".chip[data-q]").forEach(c => c.onclick = () => ask(c.dataset.q));
+$("#send").onclick = () => {{
+  const val = $("#inp").value;
+  ask(val);
+}};
+
+$("#inp").onkeydown = e => {{
+  if (e.key == "Enter") {{
+    ask($("#inp").value);   }} }};  $$(".chip[data-q]").forEach(c => {{
+  c.onclick = () => ask(c.dataset.q);
+}});
 
 function bars(el, r) {{
   el.innerHTML = r.map(x => `<div class="bar ${{x[2]}}"><span><b style="all:unset">${{x[0]}}</b><span>${{x[1]}}%</span></span><i><b></b></i></div>`).join("");
@@ -269,7 +281,7 @@ $("#ex").onclick = () => {{
 $("#grid").addEventListener("input", () => {{
   const n = F.filter((f, i) => $("#f" + i).value).length;
   n == 10 ? mood("happy", "All set. Press Analyze.") : mood("listen", n + " of 10 values entered");
-}};
+}});
 
 $("#run").onclick = async () => {{
   const v = F.map((f, i) => +$("#f" + i).value);
@@ -319,7 +331,7 @@ add("Hello, I'm Dr. Nana. Ask me a health question, upload a scan, or enter your
 mood("wave", "Hello, I'm Dr. Nana");
 setTimeout(() => mood("happy"), 3500);
 
-// INJECTED RAG MESSAGES FROM PYTHON BACKEND
+# INJECTED RAG MESSAGES FROM PYTHON BACKEND
 {f'add("{user_query}", "me");' if user_query else ''}
 {f'add("{rag_reply.replace(chr(34), chr(92)+chr(34)).replace(chr(10), " ")}", "bot"); mood("talk", "{rag_reply[:60].replace(chr(34), "")}…");' if rag_reply else ''}
 </script></body></html>
